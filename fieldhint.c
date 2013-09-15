@@ -146,13 +146,13 @@ static const VSFrameRef *VS_CC fieldhintGetFrame(int n, int activationReason, vo
             int src_stride = vsapi->getStride(top, plane);
             vs_bitblt(dstp, dst_stride*2,
                       srcp, src_stride*2,
-                      width, (height+1)/2);
+                      width*d->vi.format->bytesPerSample, (height+1)/2);
 
             srcp = vsapi->getReadPtr(bottom, plane);
             src_stride = vsapi->getStride(bottom, plane);
             vs_bitblt(dstp + dst_stride, dst_stride*2,
                       srcp + src_stride, src_stride*2,
-                      width, height/2);
+                      width*d->vi.format->bytesPerSample, height/2);
          }
       }
          
