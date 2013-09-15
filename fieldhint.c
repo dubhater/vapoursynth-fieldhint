@@ -134,7 +134,9 @@ static const VSFrameRef *VS_CC fieldhintGetFrame(int n, int activationReason, vo
          const VSFrameRef *top = vsapi->getFrameFilter(tf, d->node, frameCtx);
          const VSFrameRef *bottom = vsapi->getFrameFilter(bf, d->node, frameCtx);
 
-         for (int plane = 0; plane < d->vi.format->numPlanes; plane++) {
+         int plane;
+
+         for (plane = 0; plane < d->vi.format->numPlanes; plane++) {
             uint8_t *dstp = vsapi->getWritePtr(frame, plane);
             int dst_stride = vsapi->getStride(frame, plane);
             int width = vsapi->getFrameWidth(frame, plane);
@@ -177,9 +179,8 @@ static void VS_CC fieldhintFree(void *instanceData, VSCore *core, const VSAPI *v
 static void VS_CC fieldhintCreate(const VSMap *in, VSMap *out, void *userData, VSCore *core, const VSAPI *vsapi) {
    FieldhintData d;
    FieldhintData *data;
-   //int err;
 
-   d.node = vsapi->propGetNode(in, "clip", 0, 0);
+   d.node = vsapi->propGetNode(in, "clip", 0, NULL);
    d.vi = *vsapi->getVideoInfo(d.node);
 
    if (!d.vi.format) {
@@ -188,7 +189,7 @@ static void VS_CC fieldhintCreate(const VSMap *in, VSMap *out, void *userData, V
       return;
    }
 
-   d.ovrfile = vsapi->propGetData(in, "ovr", 0, 0);
+   d.ovrfile = vsapi->propGetData(in, "ovr", 0, NULL);
 
    data = malloc(sizeof(d));
    *data = d;
