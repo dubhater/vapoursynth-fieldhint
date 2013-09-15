@@ -15,6 +15,8 @@ Usage
 Compilation
 ===========
 
-To compile the filter in 64 bit Linux (and possibly other Unix-like systems)::
+::
 
-   clang -O3 -Wall -Wextra -Wno-unused-parameter -fPIC -shared -o libfieldhint.so fieldhint.c
+   ./autogen.sh
+   ./configure
+   make
