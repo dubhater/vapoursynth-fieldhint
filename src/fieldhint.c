@@ -154,6 +154,9 @@ static const VSFrameRef *VS_CC fieldhintGetFrame(int n, int activationReason, vo
                       srcp + src_stride, src_stride*2,
                       width*d->vi.format->bytesPerSample, height/2);
          }
+
+         vsapi->freeFrame(top);
+         vsapi->freeFrame(bottom);
       }
          
       if (d->ovr[n].hint != HINT_MISSING) {
