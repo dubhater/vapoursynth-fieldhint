@@ -1,6 +1,6 @@
-AC_INIT([Fieldhint], [1], [https://github.com/dubhater/vapoursynth-fieldhint/issues], [fieldhint], [https://github.com/dubhater/vapoursynth-fieldhint/])
+AC_INIT([Fieldhint], [2], [https://github.com/dubhater/vapoursynth-fieldhint/issues], [fieldhint], [https://github.com/dubhater/vapoursynth-fieldhint/])
 
-: ${CFLAGS="-O2"}
+: ${CFLAGS=""}
 
 AM_INIT_AUTOMAKE([foreign no-dist-gzip dist-xz subdir-objects no-define])
 AM_SILENT_RULES([yes])
