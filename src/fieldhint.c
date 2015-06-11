@@ -26,6 +26,9 @@ typedef struct {
 
     const char *ovrfile;
     ovr_t *ovr;
+    int tff;
+    char *matches;
+    int num_matches;
 } FieldhintData;
 
 
@@ -36,10 +39,35 @@ static void VS_CC fieldhintInit(VSMap *in, VSMap *out, void **instanceData, VSNo
 
 
 static const VSFrameRef *VS_CC fieldhintGetFrame(int n, int activationReason, void **instanceData, void **frameData, VSFrameContext *frameCtx, VSCore *core, const VSAPI *vsapi) {
+    if (activationReason == arFrameReady)
+        return NULL;
+
     FieldhintData *d = (FieldhintData *) * instanceData;
 
-    int tf = d->ovr[n].tf;
-    int bf = d->ovr[n].bf;
+    int tf, bf;
+
+    if (d->ovrfile) {
+        tf = d->ovr[n].tf;
+        bf = d->ovr[n].bf;
+    } else {
+        char match = d->matches[n];
+        int tff = d->tff;
+        if (match == 'n') {
+            tf = n + tff;
+            bf = n + !tff;
+        } else if (match == 'u') {
+            tf = n + !tff;
+            bf = n + tff;
+        } else if (match == 'p') {
+            tf = n - !tff;
+            bf = n - tff;
+        } else if (match == 'b') {
+            tf = n - tff;
+            bf = n - !tff;
+        } else { // 'c' and any invalid characters.
+            tf = bf = n;
+        }
+    }
 
     if (activationReason == arInitial) {
         if (tf < bf) {
@@ -87,7 +115,7 @@ static const VSFrameRef *VS_CC fieldhintGetFrame(int n, int activationReason, vo
             vsapi->freeFrame(bottom);
         }
 
-        if (d->ovr[n].hint != HINT_MISSING) {
+        if (d->ovrfile && d->ovr[n].hint != HINT_MISSING) {
             VSMap *props = vsapi->getFramePropsRW(frame);
             vsapi->propSetInt(props, "_Combed", d->ovr[n].hint, paReplace);
         }
@@ -102,17 +130,46 @@ static const VSFrameRef *VS_CC fieldhintGetFrame(int n, int activationReason, vo
 static void VS_CC fieldhintFree(void *instanceData, VSCore *core, const VSAPI *vsapi) {
     FieldhintData *d = (FieldhintData *)instanceData;
     vsapi->freeNode(d->node);
-    free(d->ovr);
+    if (d->ovr)
+        free(d->ovr);
+    if (d->matches)
+        free(d->matches);
     free(d);
 }
 
 
 static void VS_CC fieldhintCreate(const VSMap *in, VSMap *out, void *userData, VSCore *core, const VSAPI *vsapi) {
-    FieldhintData d;
+    FieldhintData d = { 0 };
     FieldhintData *data;
+    int err;
+
+    d.ovrfile = vsapi->propGetData(in, "ovr", 0, &err);
+
+    const char *matches = vsapi->propGetData(in, "matches", 0, &err);
+
+    if (!d.ovrfile && !matches) {
+        vsapi->setError(out, "FieldHint: Either 'ovr' or 'matches' must be passed.");
+        return;
+    }
+
+    if (d.ovrfile && matches) {
+        vsapi->setError(out, "FieldHint: Only one of 'ovr' and 'matches' must be passed.");
+        return;
+    }
+
+    d.tff = !!vsapi->propGetInt(in, "tff", 0, &err);
+    if (err && matches) {
+        vsapi->setError(out, "FieldHint: 'tff' must be passed when 'matches' is passed.");
+        return;
+    }
+
+    if (!err && d.ovrfile) {
+        vsapi->setError(out, "FieldHint: 'tff' must not be passed when 'ovr' is passed.");
+        return;
+    }
 
     d.node = vsapi->propGetNode(in, "clip", 0, NULL);
-    d.vi = *vsapi->getVideoInfo(d.node);
+    d.vi = vsapi->getVideoInfo(d.node);
 
     if (!d.vi->format) {
         vsapi->setError(out, "FieldHint: only constant format input supported");
@@ -120,79 +177,107 @@ static void VS_CC fieldhintCreate(const VSMap *in, VSMap *out, void *userData, V
         return;
     }
 
-    d.ovrfile = vsapi->propGetData(in, "ovr", 0, NULL);
 
-
-    int line = 0;
-    char buf[80];
-    char* pos;
-    FILE* fh = fopen(d.ovrfile, "r");
-    if (!fh) {
-        vsapi->freeNode(d.node);
-        vsapi->setError(out, "FieldHint: can't open ovr file");
-        return;
-    }
-
-    while (fgets(buf, 80, fh)) {
-        if (buf[strspn(buf, " \t\r\n")] == 0) {
-            continue;
-        }
-        line++;
-    }
-    fseek(fh, 0, 0);
-
-    d.ovr = malloc(line * sizeof(ovr_t));
-
-    line = 0;
-    memset(buf, 0, sizeof(buf));
-    while (fgets(buf, 80, fh)) {
-        char hint = 0;
-        ovr_t *entry = &d.ovr[line];
-        line++;
-        pos = buf + strspn(buf, " \t\r\n");
-
-        if (pos[0] == '#' || pos[0] == 0) {
-            continue;
-        } else if (sscanf(pos, " %u, %u, %c", &entry->tf, &entry->bf, &hint) == 3) {
-            ;
-        } else if (sscanf(pos, " %u, %u", &entry->tf, &entry->bf) == 2) {
-            ;
-        } else {
-            fclose(fh);
-            free(d.ovr);
+    if (d.ovrfile) {
+        int line = 0;
+        char buf[80];
+        char* pos;
+        FILE* fh = fopen(d.ovrfile, "r");
+        if (!fh) {
             vsapi->freeNode(d.node);
-            char err[80];
-            sprintf(err, "FieldHint: Can't parse override at line %d", line);
-            vsapi->setError(out, err);
+            vsapi->setError(out, "FieldHint: can't open ovr file");
             return;
         }
 
-        entry->hint = HINT_MISSING;
-        if (hint == '-') {
-            entry->hint = HINT_NOTCOMBED;
-        } else if (hint == '+') {
-            entry->hint = HINT_COMBED;
-        } else if (hint != 0) {
-            fclose(fh);
+        while (fgets(buf, 80, fh)) {
+            if (buf[strspn(buf, " \t\r\n")] == 0) {
+                continue;
+            }
+            line++;
+        }
+        fseek(fh, 0, 0);
+
+        d.ovr = malloc(line * sizeof(ovr_t));
+
+        line = 0;
+        memset(buf, 0, sizeof(buf));
+        while (fgets(buf, 80, fh)) {
+            char hint = 0;
+            ovr_t *entry = &d.ovr[line];
+            line++;
+            pos = buf + strspn(buf, " \t\r\n");
+
+            if (pos[0] == '#' || pos[0] == 0) {
+                continue;
+            } else if (sscanf(pos, " %u, %u, %c", &entry->tf, &entry->bf, &hint) == 3) {
+                ;
+            } else if (sscanf(pos, " %u, %u", &entry->tf, &entry->bf) == 2) {
+                ;
+            } else {
+                fclose(fh);
+                free(d.ovr);
+                vsapi->freeNode(d.node);
+                char error[80];
+                sprintf(error, "FieldHint: Can't parse override at line %d", line);
+                vsapi->setError(out, error);
+                return;
+            }
+
+            entry->hint = HINT_MISSING;
+            if (hint == '-') {
+                entry->hint = HINT_NOTCOMBED;
+            } else if (hint == '+') {
+                entry->hint = HINT_COMBED;
+            } else if (hint != 0) {
+                fclose(fh);
+                free(d.ovr);
+                vsapi->freeNode(d.node);
+                char error[80];
+                sprintf(error, "FieldHint: Invalid combed hint at line %d", line);
+                vsapi->setError(out, error);
+                return;
+            }
+
+            while (buf[78] != 0 && buf[78] != '\n' && fgets(buf, 80, fh)) {
+                ; // slurp the rest of a long line
+            }
+        }
+
+        fclose(fh);
+        if (d.vi->numFrames != line) {
+            vsapi->setError(out, "FieldHint: The number of overrides and the number of frames don't match.");
             free(d.ovr);
             vsapi->freeNode(d.node);
-            char err[80];
-            sprintf(err, "FieldHint: Invalid combed hint at line %d", line);
-            vsapi->setError(out, err);
+            return;
+        }
+    } else { // No overrides file. Use matches.
+        d.num_matches = vsapi->propGetDataSize(in, "matches", 0, &err);
+        if (d.num_matches == 0) {
+            vsapi->setError(out, "FieldHint: 'matches' must not be an empty string.");
+            vsapi->freeNode(d.node);
             return;
         }
 
-        while (buf[78] != 0 && buf[78] != '\n' && fgets(buf, 80, fh)) {
-            ; // slurp the rest of a long line
+        if (d.vi->numFrames != d.num_matches) {
+            vsapi->setError(out, "FieldHint: The number of matches and the number of frames don't match.");
+            vsapi->freeNode(d.node);
+            return;
         }
-    }
 
-    fclose(fh);
-    if (d.vi->numFrames != line) {
-        vsapi->setError(out, "FieldHint: Number of overrides and number of frames don't match.");
-        free(d.ovr);
-        vsapi->freeNode(d.node);
-        return;
+        if (matches[0] == 'p' || matches[0] == 'b') {
+            vsapi->setError(out, "FieldHint: The first match cannot be 'p' or 'b'.");
+            vsapi->freeNode(d.node);
+            return;
+        }
+
+        if (matches[d.num_matches - 1] == 'n' || matches[d.num_matches - 1] == 'u') {
+            vsapi->setError(out, "FieldHint: The last match cannot be 'n' or 'u'.");
+            vsapi->freeNode(d.node);
+            return;
+        }
+
+        d.matches = malloc(d.num_matches + 1);
+        memcpy(d.matches, matches, d.num_matches + 1);
     }
 
     data = malloc(sizeof(d));
@@ -207,10 +292,14 @@ VS_EXTERNAL_API(void) VapourSynthPluginInit(VSConfigPlugin configFunc, VSRegiste
     configFunc("com.nodame.fieldhint", "fh", "FieldHint Plugin", VAPOURSYNTH_API_VERSION, 1, plugin);
     registerFunc("Fieldhint",
             "clip:clip;"
-            "ovr:data;"
+            "ovr:data:opt;"
+            "tff:int:opt;"
+            "matches:data:opt;"
             , fieldhintCreate, NULL, plugin);
     registerFunc("FieldHint",
             "clip:clip;"
-            "ovr:data;"
+            "ovr:data:opt;"
+            "tff:int:opt;"
+            "matches:data:opt;"
             , fieldhintCreate, NULL, plugin);
 }
