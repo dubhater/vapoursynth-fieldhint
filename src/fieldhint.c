@@ -58,7 +58,9 @@ static const VSFrameRef *VS_CC fieldhintGetFrame(int n, int activationReason, vo
    } else if (activationReason == arAllFramesReady) {
       VSFrameRef *frame;
       if (tf == bf) {
-         frame = (VSFrameRef *)vsapi->getFrameFilter(tf, d->node, frameCtx);
+         const VSFrameRef *tmp = vsapi->getFrameFilter(tf, d->node, frameCtx);
+         frame = vsapi->copyFrame(tmp, core);
+         vsapi->freeFrame(tmp);
       } else {
          frame = vsapi->newVideoFrame(d->vi->format, d->vi->width, d->vi->height, NULL, core);
          const VSFrameRef *top = vsapi->getFrameFilter(tf, d->node, frameCtx);
