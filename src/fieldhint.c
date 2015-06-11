@@ -42,18 +42,14 @@ static const VSFrameRef *VS_CC fieldhintGetFrame(int n, int activationReason, vo
    int bf = d->ovr[n].bf;
 
    if (activationReason == arInitial) {
-      if (tf == bf) {
+      if (tf < bf) {
          vsapi->requestFrameFilter(tf, d->node, frameCtx);
-      } else {
-         if (tf < bf) {
-            vsapi->requestFrameFilter(tf, d->node, frameCtx);
-         }
+      }
 
-         vsapi->requestFrameFilter(bf, d->node, frameCtx);
+      vsapi->requestFrameFilter(bf, d->node, frameCtx);
 
-         if (tf > bf) {
-            vsapi->requestFrameFilter(tf, d->node, frameCtx);
-         }
+      if (tf > bf) {
+         vsapi->requestFrameFilter(tf, d->node, frameCtx);
       }
    } else if (activationReason == arAllFramesReady) {
       VSFrameRef *frame;
