@@ -32,76 +32,6 @@ typedef struct {
 static void VS_CC fieldhintInit(VSMap *in, VSMap *out, void **instanceData, VSNode *node, VSCore *core, const VSAPI *vsapi) {
    FieldhintData *d = (FieldhintData *) * instanceData;
    vsapi->setVideoInfo(&d->vi, 1, node);
-
-   int line = 0;
-   char buf[80];
-   char* pos;
-   FILE* fh = fopen(d->ovrfile, "r");
-   if (!fh) {
-      vsapi->freeNode(d->node);
-      free(d);
-      vsapi->setError(out, "FieldHint: can't open ovr file");
-      return;
-   }
-
-   while (fgets(buf, 80, fh)) {
-      if (buf[strspn(buf, " \t\r\n")] == 0) {
-         continue;
-      }
-      line++;
-   }
-   fseek(fh, 0, 0);
-
-   d->ovr = malloc(line * sizeof(ovr_t));
-
-   line = 0;
-   memset(buf, 0, sizeof(buf));
-   while (fgets(buf, 80, fh)) {
-      char hint = 0;
-      ovr_t *entry = &d->ovr[line];
-      line++;
-      pos = buf + strspn(buf, " \t\r\n");
-
-      if (pos[0] == '#' || pos[0] == 0) {
-         continue;
-      } else if (sscanf(pos, " %u, %u, %c", &entry->tf, &entry->bf, &hint) == 3) {
-         ;
-      } else if (sscanf(pos, " %u, %u", &entry->tf, &entry->bf) == 2) {
-         ;
-      } else {
-         fclose(fh);
-         free(d->ovr);
-         vsapi->freeNode(d->node);
-         free(d);
-         char err[80];
-         sprintf(err, "Fieldhint: Can't parse override at line %d", line);
-         vsapi->setError(out, err);
-         return;
-      }
-
-      entry->hint = HINT_MISSING;
-      if (hint == '-') {
-         entry->hint = HINT_NOTCOMBED;
-      } else if (hint == '+') {
-         entry->hint = HINT_COMBED;
-      } else if (hint != 0) {
-         fclose(fh);
-         free(d->ovr);
-         vsapi->freeNode(d->node);
-         free(d);
-         char err[80];
-         sprintf(err, "Fieldhint: Invalid combed hint at line %d", line);
-         vsapi->setError(out, err);
-         return;
-      }
-
-      while (buf[78] != 0 && buf[78] != '\n' && fgets(buf, 80, fh)) {
-         ; // slurp the rest of a long line
-      }
-   }
-
-   d->vi.numFrames = line;
-   fclose(fh);
 }
 
 
@@ -193,6 +123,74 @@ static void VS_CC fieldhintCreate(const VSMap *in, VSMap *out, void *userData, V
    }
 
    d.ovrfile = vsapi->propGetData(in, "ovr", 0, NULL);
+
+
+   int line = 0;
+   char buf[80];
+   char* pos;
+   FILE* fh = fopen(d.ovrfile, "r");
+   if (!fh) {
+      vsapi->freeNode(d.node);
+      vsapi->setError(out, "FieldHint: can't open ovr file");
+      return;
+   }
+
+   while (fgets(buf, 80, fh)) {
+      if (buf[strspn(buf, " \t\r\n")] == 0) {
+         continue;
+      }
+      line++;
+   }
+   fseek(fh, 0, 0);
+
+   d.ovr = malloc(line * sizeof(ovr_t));
+
+   line = 0;
+   memset(buf, 0, sizeof(buf));
+   while (fgets(buf, 80, fh)) {
+      char hint = 0;
+      ovr_t *entry = &d.ovr[line];
+      line++;
+      pos = buf + strspn(buf, " \t\r\n");
+
+      if (pos[0] == '#' || pos[0] == 0) {
+         continue;
+      } else if (sscanf(pos, " %u, %u, %c", &entry->tf, &entry->bf, &hint) == 3) {
+         ;
+      } else if (sscanf(pos, " %u, %u", &entry->tf, &entry->bf) == 2) {
+         ;
+      } else {
+         fclose(fh);
+         free(d.ovr);
+         vsapi->freeNode(d.node);
+         char err[80];
+         sprintf(err, "Fieldhint: Can't parse override at line %d", line);
+         vsapi->setError(out, err);
+         return;
+      }
+
+      entry->hint = HINT_MISSING;
+      if (hint == '-') {
+         entry->hint = HINT_NOTCOMBED;
+      } else if (hint == '+') {
+         entry->hint = HINT_COMBED;
+      } else if (hint != 0) {
+         fclose(fh);
+         free(d.ovr);
+         vsapi->freeNode(d.node);
+         char err[80];
+         sprintf(err, "Fieldhint: Invalid combed hint at line %d", line);
+         vsapi->setError(out, err);
+         return;
+      }
+
+      while (buf[78] != 0 && buf[78] != '\n' && fgets(buf, 80, fh)) {
+         ; // slurp the rest of a long line
+      }
+   }
+
+   d.vi.numFrames = line;
+   fclose(fh);
 
    data = malloc(sizeof(d));
    *data = d;
