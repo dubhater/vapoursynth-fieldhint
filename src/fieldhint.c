@@ -115,7 +115,7 @@ static void VS_CC fieldhintCreate(const VSMap *in, VSMap *out, void *userData, V
     d.vi = *vsapi->getVideoInfo(d.node);
 
     if (!d.vi->format) {
-        vsapi->setError(out, "Fieldhint: only constant format input supported");
+        vsapi->setError(out, "FieldHint: only constant format input supported");
         vsapi->freeNode(d.node);
         return;
     }
@@ -162,7 +162,7 @@ static void VS_CC fieldhintCreate(const VSMap *in, VSMap *out, void *userData, V
             free(d.ovr);
             vsapi->freeNode(d.node);
             char err[80];
-            sprintf(err, "Fieldhint: Can't parse override at line %d", line);
+            sprintf(err, "FieldHint: Can't parse override at line %d", line);
             vsapi->setError(out, err);
             return;
         }
@@ -177,7 +177,7 @@ static void VS_CC fieldhintCreate(const VSMap *in, VSMap *out, void *userData, V
             free(d.ovr);
             vsapi->freeNode(d.node);
             char err[80];
-            sprintf(err, "Fieldhint: Invalid combed hint at line %d", line);
+            sprintf(err, "FieldHint: Invalid combed hint at line %d", line);
             vsapi->setError(out, err);
             return;
         }
@@ -189,7 +189,7 @@ static void VS_CC fieldhintCreate(const VSMap *in, VSMap *out, void *userData, V
 
     fclose(fh);
     if (d.vi->numFrames != line) {
-        vsapi->setError(out, "Fieldhint: Number of overrides and number of frames don't match.");
+        vsapi->setError(out, "FieldHint: Number of overrides and number of frames don't match.");
         free(d.ovr);
         vsapi->freeNode(d.node);
         return;
@@ -198,12 +198,19 @@ static void VS_CC fieldhintCreate(const VSMap *in, VSMap *out, void *userData, V
     data = malloc(sizeof(d));
     *data = d;
 
-    vsapi->createFilter(in, out, "Fieldhint", fieldhintInit, fieldhintGetFrame, fieldhintFree, fmParallel, 0, data, core);
+    vsapi->createFilter(in, out, "FieldHint", fieldhintInit, fieldhintGetFrame, fieldhintFree, fmParallel, 0, data, core);
     return;
 }
 
 
 VS_EXTERNAL_API(void) VapourSynthPluginInit(VSConfigPlugin configFunc, VSRegisterFunction registerFunc, VSPlugin *plugin) {
-    configFunc("com.nodame.fieldhint", "fh", "VapourSynth Fieldhint Plugin", VAPOURSYNTH_API_VERSION, 1, plugin);
-    registerFunc("Fieldhint", "clip:clip;ovr:data;", fieldhintCreate, 0, plugin);
+    configFunc("com.nodame.fieldhint", "fh", "FieldHint Plugin", VAPOURSYNTH_API_VERSION, 1, plugin);
+    registerFunc("Fieldhint",
+            "clip:clip;"
+            "ovr:data;"
+            , fieldhintCreate, NULL, plugin);
+    registerFunc("FieldHint",
+            "clip:clip;"
+            "ovr:data;"
+            , fieldhintCreate, NULL, plugin);
 }

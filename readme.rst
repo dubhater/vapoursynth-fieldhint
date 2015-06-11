@@ -1,7 +1,7 @@
 Description
 ===========
 
-Fieldhint filter for VapourSynth.
+FieldHint filter for VapourSynth.
 
 This a port of the avisynth plugin.
 
@@ -10,7 +10,7 @@ Usage
 
 ::
 
-   fh.Fieldhint(clip clip, string ovr)
+   fh.FieldHint(clip clip, string ovr)
 
 Compilation
 ===========
