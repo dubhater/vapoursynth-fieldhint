@@ -22,7 +22,7 @@ typedef struct {
 
 typedef struct {
    VSNodeRef *node;
-   VSVideoInfo vi;
+   const VSVideoInfo *vi;
 
    const char *ovrfile;
    ovr_t *ovr;
@@ -31,7 +31,7 @@ typedef struct {
 
 static void VS_CC fieldhintInit(VSMap *in, VSMap *out, void **instanceData, VSNode *node, VSCore *core, const VSAPI *vsapi) {
    FieldhintData *d = (FieldhintData *) * instanceData;
-   vsapi->setVideoInfo(&d->vi, 1, node);
+   vsapi->setVideoInfo(d->vi, 1, node);
 }
 
 
@@ -60,13 +60,13 @@ static const VSFrameRef *VS_CC fieldhintGetFrame(int n, int activationReason, vo
       if (tf == bf) {
          frame = (VSFrameRef *)vsapi->getFrameFilter(tf, d->node, frameCtx);
       } else {
-         frame = vsapi->newVideoFrame(d->vi.format, d->vi.width, d->vi.height, NULL, core);
+         frame = vsapi->newVideoFrame(d->vi->format, d->vi->width, d->vi->height, NULL, core);
          const VSFrameRef *top = vsapi->getFrameFilter(tf, d->node, frameCtx);
          const VSFrameRef *bottom = vsapi->getFrameFilter(bf, d->node, frameCtx);
 
          int plane;
 
-         for (plane = 0; plane < d->vi.format->numPlanes; plane++) {
+         for (plane = 0; plane < d->vi->format->numPlanes; plane++) {
             uint8_t *dstp = vsapi->getWritePtr(frame, plane);
             int dst_stride = vsapi->getStride(frame, plane);
             int width = vsapi->getFrameWidth(frame, plane);
@@ -76,13 +76,13 @@ static const VSFrameRef *VS_CC fieldhintGetFrame(int n, int activationReason, vo
             int src_stride = vsapi->getStride(top, plane);
             vs_bitblt(dstp, dst_stride*2,
                       srcp, src_stride*2,
-                      width*d->vi.format->bytesPerSample, (height+1)/2);
+                      width*d->vi->format->bytesPerSample, (height+1)/2);
 
             srcp = vsapi->getReadPtr(bottom, plane);
             src_stride = vsapi->getStride(bottom, plane);
             vs_bitblt(dstp + dst_stride, dst_stride*2,
                       srcp + src_stride, src_stride*2,
-                      width*d->vi.format->bytesPerSample, height/2);
+                      width*d->vi->format->bytesPerSample, height/2);
          }
 
          vsapi->freeFrame(top);
@@ -116,7 +116,7 @@ static void VS_CC fieldhintCreate(const VSMap *in, VSMap *out, void *userData, V
    d.node = vsapi->propGetNode(in, "clip", 0, NULL);
    d.vi = *vsapi->getVideoInfo(d.node);
 
-   if (!d.vi.format) {
+   if (!d.vi->format) {
       vsapi->setError(out, "Fieldhint: only constant format input supported");
       vsapi->freeNode(d.node);
       return;
@@ -189,8 +189,13 @@ static void VS_CC fieldhintCreate(const VSMap *in, VSMap *out, void *userData, V
       }
    }
 
-   d.vi.numFrames = line;
    fclose(fh);
+   if (d.vi->numFrames != line) {
+      vsapi->setError(out, "Fieldhint: Number of overrides and number of frames don't match.");
+      free(d.ovr);
+      vsapi->freeNode(d.node);
+      return;
+   }
 
    data = malloc(sizeof(d));
    *data = d;
