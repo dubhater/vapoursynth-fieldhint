@@ -49,3 +49,9 @@ Compilation
     ./autogen.sh
     ./configure
     make
+
+
+License
+=======
+
+GPL v2, like the Avisynth plugin.
